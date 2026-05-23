@@ -59,7 +59,7 @@ Token Lexer::readIdentKey() {
 		{"while",    TokenType::WHILE},
 		{"return",   TokenType::RETURN},
 		{"break",    TokenType::BREAK},
-		{"for",    TokenType::FOR},
+		{"for",      TokenType::FOR},
 		{"continue", TokenType::CONTINUE},
 		{"include",  TokenType::INCLUDE},
 		{"print",    TokenType::PRINT},
