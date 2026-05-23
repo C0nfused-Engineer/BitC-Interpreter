@@ -1,0 +1,432 @@
+================================================================================
+  BitC Language Specification
+  Standard: BC26
+  Version:  2026
+================================================================================
+
+All interpreter, compiler, and tooling decisions must conform to this spec.
+Deviations must be recorded as errata.
+
+--------------------------------------------------------------------------------
+1  OVERVIEW
+--------------------------------------------------------------------------------
+
+BitC is a general-purpose scripting language with C-like syntax where the
+fundamental unit of data is the single bit. It is designed for small programs
+and scripting tasks where explicit control over individual bits is natural and
+desirable.
+
+BitC is interpreted. The reference implementation is a tree-walk interpreter
+written in C++. A compiled backend may be added later; this spec covers
+language semantics only and is backend-agnostic.
+
+1.1  Design Principles
+----------------------
+- Familiar to anyone who knows C — syntax differences are minimal and
+  intentional.
+- Strict — the core language has one primitive type (bit) and one aggregate
+  type (bit[N]). No hidden integers, no implicit promotions.
+- Explicit — operations on multi-bit values are written out in terms of bits.
+  The language does not paper over the bit-level reality.
+- Extensible — the standard library adds bint<N>, ubint<N>, and bfloat on top
+  of the core. These are library types, not built-ins.
+
+1.2  Implementation Stack
+--------------------------
+  [ BitC programs         ]   <- users write this (.bc source files)
+  [ BitC interpreter      ]   <- written in C++
+  [ Host OS / VM          ]   <- manages hardware for the interpreter
+  [ Physical / Virtual HW ]   <- real machine or QEMU VM
+
+The interpreter runs on the host OS. BitC programs do not interact with the
+OS directly; all system interaction goes through the interpreter.
+
+--------------------------------------------------------------------------------
+2  LEXICAL STRUCTURE
+--------------------------------------------------------------------------------
+
+2.1  Character Set
+------------------
+BitC source files are UTF-8. The language itself uses only printable ASCII.
+UTF-8 is permitted inside comments.
+
+Source files use the extension: .bc
+
+2.2  Comments
+-------------
+BitC uses the same comment syntax as C:
+
+    // single-line comment
+
+Comments are stripped during lexing and produce no tokens.
+
+2.3  Keywords
+-------------
+The following identifiers are reserved and may not be used as variable or
+function names:
+
+  bit       - The primitive type. Represents a single binary digit.
+  if        - Conditional branch.
+  else      - Alternative branch in an if statement.
+  while     - Loop with condition checked before each iteration.
+  for       - C-style loop: init; condition; increment.
+  break     - Exit the nearest enclosing loop.
+  continue  - Skip to the next iteration of the nearest enclosing loop.
+  fn        - Function definition keyword.
+  return    - Return a value from a function.
+  true      - Literal bit value 1.
+  false     - Literal bit value 0.
+  include   - Include another BitC source file.
+  import    - Import a module (reserved for stdlib, Phase 6).
+  null      - Reserved — not currently used.
+
+2.4  Operators
+--------------
+Bitwise:
+  &    AND         Result is 1 only if both operands are 1.
+  |    OR          Result is 1 if either operand is 1.
+  ^    XOR         Exclusive OR. Result is 1 if operands differ.
+  ~    NOT         Bitwise complement. Flips every bit.
+  <<   LSHIFT      Left shift. Shifts bits toward higher positions.
+  >>   RSHIFT      Right shift. Shifts bits toward lower positions.
+
+Assignment:
+  =    ASSIGN      Assign value to variable.
+  &=   AND_ASSIGN  Bitwise AND and assign.
+  |=   OR_ASSIGN   Bitwise OR and assign.
+  ^=   XOR_ASSIGN  Bitwise XOR and assign.
+
+Comparison:
+  ==   EQ          Equal to.
+  !=   NEQ         Not equal to.
+  <    LT          Less than (array size context / comparison).
+  >    GT          Greater than.
+
+Logical:
+  &&   LOGICAL_AND Logical AND (short-circuit).
+  ||   LOGICAL_OR  Logical OR (short-circuit).
+  !    LOGICAL_NOT Logical NOT.
+
+Other:
+  *    DEREF/PTR   Pointer dereference or pointer type marker.
+  %    MODULO      Modulo (implementation-defined for bit arrays).
+  &    ADDRESS_OF  Address-of when used as unary prefix (context-sensitive).
+  .    DOT         Member access.
+  #    HASH        Preprocessor-style directive marker.
+
+Punctuation:
+  ;    SEMICOLON   Statement terminator.
+  :    COLON       Label or type annotation separator.
+  ::   SCOPE       Scope resolution.
+  ,    COMMA       Argument / element separator.
+  ( )  PARENS      Grouping, function call, condition.
+  { }  BRACES      Block body.
+  [ ]  BRACKETS    Array subscript / array type size.
+  < >  ANGLES      Type parameter delimiters (generics context).
+
+2.5  Operator Precedence (highest to lowest)
+---------------------------------------------
+  1.  ~  !                     (unary prefix)
+  2.  *  (dereference)         (unary prefix)
+  3.  <<  >>                   (shift)
+  4.  &                        (bitwise AND)
+  5.  ^                        (bitwise XOR)
+  6.  |                        (bitwise OR)
+  7.  ==  !=  <  >             (comparison)
+  8.  &&                       (logical AND)
+  9.  ||                       (logical OR)
+  10. =  &=  |=  ^=            (assignment, right-associative)
+
+2.6  Literals
+-------------
+Bit literals:
+  0        false / bit value zero
+  1        true  / bit value one
+  true     alias for 1
+  false    alias for 0
+
+Array literals use curly-brace initialiser syntax:
+  bit[8] x = {1, 0, 1, 1, 0, 0, 0, 0};
+
+--------------------------------------------------------------------------------
+3  TYPE SYSTEM
+--------------------------------------------------------------------------------
+
+3.1  Primitive Type
+--------------------
+  bit
+
+  The only primitive type in the core language. Represents a single binary
+  digit. A bit variable holds exactly one value: 0 or 1.
+
+  Declaration:
+    bit x;          // uninitialised
+    bit x = 1;      // initialised to 1
+    bit x = true;   // equivalent
+
+3.2  Array Type
+---------------
+  bit[N]
+
+  A fixed-length array of N bits. N must be a positive integer known at
+  compile/parse time. Elements are indexed from 0 (least significant) to
+  N-1 (most significant) unless otherwise specified by the implementation.
+
+  Declaration:
+    bit[8]  byte_val = {1, 0, 1, 0, 1, 1, 0, 0};
+    bit[16] word_val;
+
+  Subscript access:
+    byte_val[0]     // first element
+    byte_val[7]     // last element of an 8-bit array
+
+  The size N is part of the type. bit[8] and bit[16] are distinct types.
+  Assigning between differently-sized arrays is a type error.
+
+3.3  Pointer Type
+-----------------
+  ptr
+
+  A pointer holds the address of another variable. Pointer arithmetic is
+  not supported in the core language. Under the hood the interpreter stores
+  a pointer as a C++ pointer; the compiled backend stores a machine address.
+  BitC programs treat ptr as opaque — its internal representation is
+  implementation territory.
+
+  Declaration:
+    ptr p = &x;     // p holds the address of x
+
+  Dereference:
+    bit y = *p;     // read the value at the address p holds
+
+  Pointer-to-array:
+    ptr pa = &arr;
+    bit z = (*pa)[3];
+
+3.4  No Implicit Conversion
+----------------------------
+BitC has no implicit type promotion. You cannot assign a bit[8] to a bit[16]
+without explicit handling. The interpreter must reject mismatched assignments
+with a clear type error.
+
+3.5  Standard Library Types (not core — Phase 6)
+-------------------------------------------------
+The following types are provided by the standard library, implemented in BitC
+itself on top of bit and bit[N]. They are NOT keywords or built-in types.
+
+  bint<N>    Signed N-bit integer.
+  ubint<N>   Unsigned N-bit integer.
+  bfloat     Floating-point value (bit-level representation).
+
+Import them with:
+  import stdlib.bint;
+
+--------------------------------------------------------------------------------
+4  MEMORY MODEL
+--------------------------------------------------------------------------------
+
+4.1  Addressing
+---------------
+The BC26 standard supports two memory models. The interpreter selects the
+model at startup based on the environment it detects:
+
+  ByteAddressedMemory
+    Runs on real hardware. Sub-bit addressing is handled inside the
+    interpreter using a byte_address + bit_offset trick. This is the
+    default mode.
+
+  BitAddressedMemory
+    Runs on a bit-addressed virtual machine. Every bit has its own unique
+    address. No padding, no alignment waste. Intended for the future BitC VM.
+
+Both models conform to the same MemoryModel interface. BitC programs cannot
+observe which model is in use.
+
+4.2  Alignment
+--------------
+Under ByteAddressedMemory, bit[N] arrays are packed with no mandatory padding.
+The interpreter is free to pad internally for performance but must not expose
+padding to BitC programs. sizeof-equivalent queries return N, not a padded
+value.
+
+4.3  Scope and Lifetime
+------------------------
+Variables are scoped to the block ({ }) in which they are declared.
+Variables do not exist before their declaration line.
+Variables are destroyed when execution leaves their enclosing block.
+
+There is no heap allocation in the core language. The standard library may
+provide allocator functions in a later phase.
+
+--------------------------------------------------------------------------------
+5  CONTROL FLOW
+--------------------------------------------------------------------------------
+
+5.1  If / Else
+--------------
+  if (condition) {
+      // body
+  } else if (condition2) {
+      // body
+  } else {
+      // body
+  }
+
+  The condition must evaluate to a single bit. 1 is truthy, 0 is falsy.
+  Braces are mandatory.
+
+5.2  While Loop
+---------------
+  while (condition) {
+      // body
+  }
+
+  Loops while condition is 1. break and continue are supported.
+
+5.3  For Loop
+-------------
+  for (init; condition; increment) {
+      // body
+  }
+
+  Identical semantics to C. The init statement is executed once. The condition
+  is checked before each iteration. The increment runs after each iteration.
+
+5.4  Break and Continue
+------------------------
+  break     - Immediately exits the nearest enclosing while or for loop.
+  continue  - Skips the remainder of the loop body and begins the next
+              iteration (re-evaluating the condition first).
+
+--------------------------------------------------------------------------------
+6  FUNCTIONS
+--------------------------------------------------------------------------------
+
+6.1  Definition
+---------------
+  fn function_name(bit param1, bit[8] param2) -> bit {
+      // body
+      return param1;
+  }
+
+  - The fn keyword introduces a function definition.
+  - Parameter types are declared inline.
+  - The return type follows the -> arrow.
+  - A function with no return value omits the -> clause (implicitly void).
+  - Braces are mandatory.
+
+6.2  Calling
+------------
+  bit result = function_name(x, arr);
+
+  Arguments are passed by value for bit. Passing bit[N] passes a copy.
+  Passing via ptr gives pointer semantics (the callee can modify the original).
+
+6.3  Recursion
+--------------
+  Recursion is permitted. The interpreter manages the call stack. There is no
+  mandated maximum depth, but the host OS stack may impose a practical limit.
+
+6.4  Forward Declarations
+-------------------------
+  Not required in BC26. The interpreter performs a two-pass scan so functions
+  may be called before they are defined in the source file.
+
+--------------------------------------------------------------------------------
+7  MODULES AND INCLUDES
+--------------------------------------------------------------------------------
+
+7.1  Include
+------------
+  include "other_file.bc";
+
+  Inserts the content of the named file at the include site before lexing.
+  Paths are relative to the source file's directory. Circular includes are
+  a compile-time error.
+
+7.2  Import (stdlib only — Phase 6)
+-------------------------------------
+  import stdlib.bint;
+  import stdlib.bfloat;
+
+  Imports are resolved before execution begins. Only standard library modules
+  are importable in BC26. User-defined module namespaces are reserved for a
+  future standard revision.
+
+--------------------------------------------------------------------------------
+8  ERROR HANDLING
+--------------------------------------------------------------------------------
+
+8.1  Compile-Time Errors
+-------------------------
+The interpreter must report the following as errors before execution begins:
+
+  - Type mismatch (e.g. assigning bit[8] to bit[4]).
+  - Use of undeclared identifier.
+  - Circular include.
+  - Malformed syntax (unterminated block, missing semicolon, etc.).
+  - Array index out of declared bounds (static analysis where possible).
+
+8.2  Runtime Errors
+-------------------
+  - Array index out of bounds (checked at access time).
+  - Null pointer dereference.
+  - Stack overflow (unbounded recursion).
+
+All runtime errors must print a message including the source file name, line
+number, column number, and a plain-English description before halting.
+
+8.3  Error Message Format
+--------------------------
+  [BitC Error] file.bc:12:5 — type mismatch: cannot assign bit[8] to bit[4]
+  [BitC Error] file.bc:7:1  — undeclared identifier 'foo'
+
+--------------------------------------------------------------------------------
+9  IMPLEMENTATION NOTES (NON-NORMATIVE)
+--------------------------------------------------------------------------------
+
+This section records implementation decisions for the C++ reference interpreter.
+These are not part of the language standard and may differ in other backends.
+
+9.1  Lexer
+----------
+  - Produces a vector<Token> from the source string.
+  - Token types: BIT_LITERAL, BIT, IF, ELSE, WHILE, FOR, BREAK, CONTINUE,
+    FUNCTION (fn), INCLUDE, IMPORT, RETURN, TRUE, FALSE, NULL_KW,
+    IDENTIFIER, EQUALS, EQ_EQ, AMP, AMP_AMP, AMP_EQ, PIPE, PIPE_PIPE,
+    PIPE_EQ, CARET, ASTR, TILDE, LSHIFT, RSHIFT, HASH, DOT, EXC, EXC_EQ,
+    SEMICOLON, COLON, SCOPE, LANGLE, RANGLE, LPAREN, RPAREN, LBRACE,
+    RBRACE, LBRACKET, RBRACKET, COMMA, END_OF_FILE.
+  - Keywords and identifiers share the same initial scan; the keyword table
+    is checked after the identifier text is read.
+  - ELIF is NOT a single token. else if is two tokens: ELSE then IF.
+
+9.2  Parser
+-----------
+  - Recursive-descent, hand-written.
+  - Produces an ASTNode* tree.
+  - Node types: BinaryOp, UnaryOp, VarDecl, ArrayDecl, Subscript,
+    IfStmt, WhileLoop, ForLoop, FuncDef, FuncCall, ReturnStmt,
+    BreakStmt, ContinueStmt, Block, PtrDecl, Deref, AddressOf.
+  - >> is lexed as RSHIFT; the parser splits it into two GT tokens inside
+    type-parameter contexts.
+
+9.3  Interpreter
+----------------
+  - Tree-walk interpreter. eval() dispatches on ASTNode type.
+  - Environment: stack of symbol tables (one per scope block).
+  - bit values stored as C++ bool.
+  - bit[N] stored as std::vector<bool> of length N.
+  - ptr stored as a C++ pointer to the interpreter's value representation.
+  - Memory model selected at startup; default is ByteAddressedMemory.
+
+9.4  File Extension
+-------------------
+  BitC source files use the .bc extension.
+  The interpreter binary is named: bitc
+  Invocation: bitc run program.bc
+              bitc repl
+
+================================================================================
+  End of BitC BC26 Language Specification
+================================================================================

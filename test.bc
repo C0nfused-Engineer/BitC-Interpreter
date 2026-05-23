@@ -1,0 +1,4 @@
+bit x = 1;
+print x;
+bit[8] flags = {1, 0, 1, 0, 1, 0, 1, 0};
+print flags;
