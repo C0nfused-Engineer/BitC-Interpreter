@@ -4,19 +4,26 @@
 enum class TokenType {
 	// Literals
 	BIT_LITERAL, // 0 or 1, TRUE or FALSE
-	NUMBER, // digit for sizing bit arrays
+	NUMBER,      // digit for sizing bit arrays
+	NULL_KW,     // NULL 
 
 	// Keywords
 	BIT,         // bit
+	PTR,         // pointer
 	VOID,        // void
+	ALIAS,       // alias
 	IF,          // if
 	ELSE,        // else
 	WHILE,       // while
+	FOR,         // for ? might remove
 	RETURN,      // return
 	BREAK,       // break
 	CONTINUE,    // continue
 	INCLUDE,     // include
+	IN,          // input
 	PRINT,       // print
+	FN,          // function
+	OVERLOAD,    // overload
 
 	// Identifiers
 	IDENTIFIER,  // variable name
@@ -25,26 +32,21 @@ enum class TokenType {
 	EQUALS,      // =
 	EQ_EQ,       // ==
 	AMP,         // &
-	AMP_AMP,     // &&
 	AMP_EQ,      // &=
 	PIPE,        // |
-	PIPE_PIPE,   // ||
 	PIPE_EQ,     // |=
 	CARET,       // ^
-	ASTR,        // *
 	TILDE,       // ~
 	LSHIFT,      // <<
 	RSHIFT,      // >>
+	ARROW,       // ->
 	HASH,        // #
 	DOT,         // .
 	EXC,         // !
 	EXC_EQ,      // !=
-	ARROW,       // ->
 	SEMICOLON,   // ;
 	COLON,       // :
 	COLON_COLON, // ::
-	SLASH,       // /
-	SLASH_SLASH, // //
 	LANGLE,      // <
 	RANGLE,      // >
 	LPAREN,      // (

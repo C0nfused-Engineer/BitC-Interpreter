@@ -69,48 +69,54 @@ function names:
   if        - Conditional branch.
   else      - Alternative branch in an if statement.
   while     - Loop with condition checked before each iteration.
-  for       - C-style loop: init; condition; increment.
+  for       - C-style loop: init; condition; increment. (not yet implemented)
   break     - Exit the nearest enclosing loop.
   continue  - Skip to the next iteration of the nearest enclosing loop.
-  fn        - Function definition keyword.
   return    - Return a value from a function.
+  void      - Return type for functions that produce no value.
   true      - Literal bit value 1.
   false     - Literal bit value 0.
+  fn        - Function definition keyword.
+  print     - Built-in output statement.
+  in        - Built-in input expression.
   include   - Include another BitC source file.
-  import    - Import a module (reserved for stdlib, Phase 6).
-  null      - Reserved — not currently used.
+
+The following identifiers are reserved for future use. They are recognised by
+the lexer and will produce a parse error if used anywhere in a program:
+
+  NULL      - Reserved. Intended as a null / uninitialised sentinel.
+  overload  - Reserved. Intended for operator and function overloading.
+  ptr       - Reserved. Intended as a bit-pointer type.
+  alias     - Reserved. Intended for type and variable aliasing.
 
 2.4  Operators
 --------------
 Bitwise:
-  &    AND         Result is 1 only if both operands are 1.
-  |    OR          Result is 1 if either operand is 1.
-  ^    XOR         Exclusive OR. Result is 1 if operands differ.
-  ~    NOT         Bitwise complement. Flips every bit.
+  &    AND         Scalar: 1 if both operands are 1.
+                   Array:  element-wise AND over two bit[N] arrays of equal
+                           length. Both operands must be the same type.
+  |    OR          Scalar: 1 if either operand is 1.
+                   Array:  element-wise OR.
+  ^    XOR         Scalar: 1 if operands differ.
+                   Array:  element-wise XOR.
+  ~    NOT         Flips the bit. Unary prefix.
+  !    NOT         Alias for ~. Unary prefix.
   <<   LSHIFT      Left shift. Shifts bits toward higher positions.
   >>   RSHIFT      Right shift. Shifts bits toward lower positions.
 
 Assignment:
   =    ASSIGN      Assign value to variable.
-  &=   AND_ASSIGN  Bitwise AND and assign.
-  |=   OR_ASSIGN   Bitwise OR and assign.
-  ^=   XOR_ASSIGN  Bitwise XOR and assign.
+  &=   AND_ASSIGN  Bitwise AND and assign.  (reserved — not yet implemented)
+  |=   OR_ASSIGN   Bitwise OR and assign.   (reserved — not yet implemented)
+  ^=   XOR_ASSIGN  Bitwise XOR and assign.  (reserved — not yet implemented)
 
 Comparison:
-  ==   EQ          Equal to.
-  !=   NEQ         Not equal to.
-  <    LT          Less than (array size context / comparison).
-  >    GT          Greater than.
-
-Logical:
-  &&   LOGICAL_AND Logical AND (short-circuit).
-  ||   LOGICAL_OR  Logical OR (short-circuit).
-  !    LOGICAL_NOT Logical NOT.
+  ==   EQ          Equal to.       Returns a single bit.
+  !=   NEQ         Not equal to.   Returns a single bit.
+  <    LT          Less than.      Returns a single bit.
+  >    GT          Greater than.   Returns a single bit.
 
 Other:
-  *    DEREF/PTR   Pointer dereference or pointer type marker.
-  %    MODULO      Modulo (implementation-defined for bit arrays).
-  &    ADDRESS_OF  Address-of when used as unary prefix (context-sensitive).
   .    DOT         Member access.
   #    HASH        Preprocessor-style directive marker.
 
@@ -120,22 +126,24 @@ Punctuation:
   ::   SCOPE       Scope resolution.
   ,    COMMA       Argument / element separator.
   ( )  PARENS      Grouping, function call, condition.
-  { }  BRACES      Block body.
+  { }  BRACES      Block body / array literal.
   [ ]  BRACKETS    Array subscript / array type size.
-  < >  ANGLES      Type parameter delimiters (generics context).
+
+Removed from BC26:
+  &&   LOGICAL_AND  Removed. Use & on scalar bits instead.
+  ||   LOGICAL_OR   Removed. Use | on scalar bits instead.
+  *    DEREF/PTR    Reserved for future ptr implementation.
+  %    MODULO       Not part of the core language.
 
 2.5  Operator Precedence (highest to lowest)
 ---------------------------------------------
-  1.  ~  !                     (unary prefix)
-  2.  *  (dereference)         (unary prefix)
-  3.  <<  >>                   (shift)
-  4.  &                        (bitwise AND)
-  5.  ^                        (bitwise XOR)
-  6.  |                        (bitwise OR)
-  7.  ==  !=  <  >             (comparison)
-  8.  &&                       (logical AND)
-  9.  ||                       (logical OR)
-  10. =  &=  |=  ^=            (assignment, right-associative)
+  1.  ~  !                     (unary prefix, NOT)
+  2.  <<  >>                   (shift)
+  3.  &                        (bitwise AND — scalar or array)
+  4.  ^                        (bitwise XOR — scalar or array)
+  5.  |                        (bitwise OR  — scalar or array)
+  6.  ==  !=  <  >             (comparison, returns bit)
+  7.  =  &=  |=  ^=            (assignment, right-associative)
 
 2.6  Literals
 -------------
@@ -144,6 +152,8 @@ Bit literals:
   1        true  / bit value one
   true     alias for 1
   false    alias for 0
+
+There are no string literals in BitC.
 
 Array literals use curly-brace initialiser syntax:
   bit[8] x = {1, 0, 1, 1, 0, 0, 0, 0};
@@ -160,7 +170,6 @@ Array literals use curly-brace initialiser syntax:
   digit. A bit variable holds exactly one value: 0 or 1.
 
   Declaration:
-    bit x;          // uninitialised
     bit x = 1;      // initialised to 1
     bit x = true;   // equivalent
 
@@ -169,47 +178,25 @@ Array literals use curly-brace initialiser syntax:
   bit[N]
 
   A fixed-length array of N bits. N must be a positive integer known at
-  compile/parse time. Elements are indexed from 0 (least significant) to
-  N-1 (most significant) unless otherwise specified by the implementation.
+  parse time. Elements are indexed from 0 to N-1.
 
   Declaration:
     bit[8]  byte_val = {1, 0, 1, 0, 1, 1, 0, 0};
-    bit[16] word_val;
-
-  Subscript access:
-    byte_val[0]     // first element
-    byte_val[7]     // last element of an 8-bit array
+    bit[16] word_val = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
   The size N is part of the type. bit[8] and bit[16] are distinct types.
   Assigning between differently-sized arrays is a type error.
 
-3.3  Pointer Type
------------------
-  ptr
+  Element-wise binary operations require both arrays to be the same length.
+  Mixing a scalar bit with a bit[N] in a binary operation is a runtime error.
 
-  A pointer holds the address of another variable. Pointer arithmetic is
-  not supported in the core language. Under the hood the interpreter stores
-  a pointer as a C++ pointer; the compiled backend stores a machine address.
-  BitC programs treat ptr as opaque — its internal representation is
-  implementation territory.
-
-  Declaration:
-    ptr p = &x;     // p holds the address of x
-
-  Dereference:
-    bit y = *p;     // read the value at the address p holds
-
-  Pointer-to-array:
-    ptr pa = &arr;
-    bit z = (*pa)[3];
-
-3.4  No Implicit Conversion
+3.3  No Implicit Conversion
 ----------------------------
 BitC has no implicit type promotion. You cannot assign a bit[8] to a bit[16]
 without explicit handling. The interpreter must reject mismatched assignments
 with a clear type error.
 
-3.5  Standard Library Types (not core — Phase 6)
+3.4  Standard Library Types (not core — Phase 6)
 -------------------------------------------------
 The following types are provided by the standard library, implemented in BitC
 itself on top of bit and bit[N]. They are NOT keywords or built-in types.
@@ -255,6 +242,9 @@ Variables are scoped to the block ({ }) in which they are declared.
 Variables do not exist before their declaration line.
 Variables are destroyed when execution leaves their enclosing block.
 
+Function parameters are scoped to the function body. Each function call
+receives its own environment; parameters are passed by value.
+
 There is no heap allocation in the core language. The standard library may
 provide allocator functions in a later phase.
 
@@ -285,12 +275,14 @@ provide allocator functions in a later phase.
 
 5.3  For Loop
 -------------
+  NOT YET IMPLEMENTED.
+
   for (init; condition; increment) {
       // body
   }
 
-  Identical semantics to C. The init statement is executed once. The condition
-  is checked before each iteration. The increment runs after each iteration.
+  The keyword for is reserved. Using it will produce a parse error in the
+  current interpreter. Implementation is planned for a future revision.
 
 5.4  Break and Continue
 ------------------------
@@ -304,23 +296,34 @@ provide allocator functions in a later phase.
 
 6.1  Definition
 ---------------
-  fn function_name(bit param1, bit[8] param2) -> bit {
-      // body
-      return param1;
+  fn and_bits(bit a, bit b) -> bit {
+      return a & b;
   }
 
-  - The fn keyword introduces a function definition.
-  - Parameter types are declared inline.
-  - The return type follows the -> arrow.
-  - A function with no return value omits the -> clause (implicitly void).
+  fn mask(bit[4] input, bit[4] m) -> bit[4] {
+      return input & m;
+  }
+
+  fn print_flags(bit[8] flags) {
+      print(flags);
+  }
+
+  - The fn keyword introduces every function definition.
+  - The return type follows the parameter list after a -> arrow.
+  - A function with no return value omits the -> clause entirely
+    (implicitly void).
+  - Parameter types are declared inline before each parameter name.
   - Braces are mandatory.
+  - Functions may not be declared inside other functions.
 
 6.2  Calling
 ------------
-  bit result = function_name(x, arr);
+  bit result   = and_bits(x, y);
+  bit[4] out   = mask(nibble, {1, 1, 0, 0});
+  print_flags(flags);
 
-  Arguments are passed by value for bit. Passing bit[N] passes a copy.
-  Passing via ptr gives pointer semantics (the callee can modify the original).
+  Arguments are passed by value. bit and bit[N] are both copied at the
+  call site. The callee cannot modify the caller's variables directly.
 
 6.3  Recursion
 --------------
@@ -332,11 +335,49 @@ provide allocator functions in a later phase.
   Not required in BC26. The interpreter performs a two-pass scan so functions
   may be called before they are defined in the source file.
 
+6.5  Return
+-----------
+  return expr;   // returns a value from a non-void function
+  return;        // valid inside a void function
+
+  Execution reaching the end of a non-void function without a return
+  statement is a runtime error.
+
 --------------------------------------------------------------------------------
-7  MODULES AND INCLUDES
+7  BUILT-IN STATEMENTS
 --------------------------------------------------------------------------------
 
-7.1  Include
+7.1  print
+----------
+  print(expr);
+
+  Evaluates expr and writes the result to stdout.
+
+    print(x);       // prints a scalar bit:  0  or  1
+    print(flags);   // prints a bit array:   [1, 0, 1, 0, 1, 0, 1, 0]
+
+  print is a statement, not a function. It cannot be used as an expression
+  and does not return a value. The parentheses are mandatory.
+
+7.2  in
+-------
+  bit x = in();
+
+  Reads a single bit value from stdin. Blocks until the user enters a
+  valid bit literal (0, 1, true, or false). If the input is not a valid
+  bit literal the interpreter re-prompts until a valid value is entered.
+
+  in() is an expression that evaluates to a bit. It may appear anywhere
+  a bit expression is valid:
+
+    bit x = in();
+    if (in()) { ... }
+
+--------------------------------------------------------------------------------
+8  MODULES AND INCLUDES
+--------------------------------------------------------------------------------
+
+8.1  Include
 ------------
   include "other_file.bc";
 
@@ -344,7 +385,7 @@ provide allocator functions in a later phase.
   Paths are relative to the source file's directory. Circular includes are
   a compile-time error.
 
-7.2  Import (stdlib only — Phase 6)
+8.2  Import (stdlib only — Phase 6)
 -------------------------------------
   import stdlib.bint;
   import stdlib.bfloat;
@@ -354,10 +395,10 @@ provide allocator functions in a later phase.
   future standard revision.
 
 --------------------------------------------------------------------------------
-8  ERROR HANDLING
+9  ERROR HANDLING
 --------------------------------------------------------------------------------
 
-8.1  Compile-Time Errors
+9.1  Compile-Time Errors
 -------------------------
 The interpreter must report the following as errors before execution begins:
 
@@ -366,66 +407,82 @@ The interpreter must report the following as errors before execution begins:
   - Circular include.
   - Malformed syntax (unterminated block, missing semicolon, etc.).
   - Array index out of declared bounds (static analysis where possible).
+  - Use of a reserved keyword (NULL, overload, ptr, alias) as an identifier.
 
-8.2  Runtime Errors
+9.2  Runtime Errors
 -------------------
   - Array index out of bounds (checked at access time).
-  - Null pointer dereference.
+  - Array length mismatch in binary operation (e.g. bit[4] & bit[8]).
+  - Scalar / array type mismatch in binary operation.
   - Stack overflow (unbounded recursion).
+  - Missing return in a non-void function.
 
-All runtime errors must print a message including the source file name, line
-number, column number, and a plain-English description before halting.
-
-8.3  Error Message Format
+9.3  Error Message Format
 --------------------------
-  [BitC Error] file.bc:12:5 — type mismatch: cannot assign bit[8] to bit[4]
-  [BitC Error] file.bc:7:1  — undeclared identifier 'foo'
+  Error: <description> at line <L> col <C> (got '<token>')
+
+  Examples:
+    Error: expected ';' at line 4 col 12 (got 'x')
+    Error: undeclared identifier 'foo' at line 7 col 1
+    Error: keyword 'ptr' is reserved and not yet implemented at line 2 col 5
 
 --------------------------------------------------------------------------------
-9  IMPLEMENTATION NOTES (NON-NORMATIVE)
+10  IMPLEMENTATION NOTES (NON-NORMATIVE)
 --------------------------------------------------------------------------------
 
 This section records implementation decisions for the C++ reference interpreter.
 These are not part of the language standard and may differ in other backends.
 
-9.1  Lexer
-----------
+10.1  Lexer
+-----------
   - Produces a vector<Token> from the source string.
-  - Token types: BIT_LITERAL, BIT, IF, ELSE, WHILE, FOR, BREAK, CONTINUE,
-    FUNCTION (fn), INCLUDE, IMPORT, RETURN, TRUE, FALSE, NULL_KW,
-    IDENTIFIER, EQUALS, EQ_EQ, AMP, AMP_AMP, AMP_EQ, PIPE, PIPE_PIPE,
-    PIPE_EQ, CARET, ASTR, TILDE, LSHIFT, RSHIFT, HASH, DOT, EXC, EXC_EQ,
-    SEMICOLON, COLON, SCOPE, LANGLE, RANGLE, LPAREN, RPAREN, LBRACE,
-    RBRACE, LBRACKET, RBRACKET, COMMA, END_OF_FILE.
+  - Token types: BIT_LITERAL, NUMBER, BIT, VOID, IF, ELSE, WHILE, FOR,
+    BREAK, CONTINUE, FN, RETURN, PRINT, IN, INCLUDE, TRUE, FALSE,
+    NULL_KW, OVERLOAD_KW, PTR_KW, ALIAS_KW,
+    IDENTIFIER, EQUALS, EQ_EQ, AMP, AMP_EQ, PIPE, PIPE_EQ, CARET,
+    TILDE, LSHIFT, RSHIFT, ARROW, HASH, DOT, EXC, EXC_EQ,
+    SEMICOLON, COLON, COLON_COLON, LANGLE, RANGLE,
+    LPAREN, RPAREN, LBRACE, RBRACE, LBRACKET, RBRACKET, COMMA,
+    END_OF_FILE.
+  - AMP_AMP and PIPE_PIPE are not emitted. The sequences && and || are
+    a lexer error in BC26.
   - Keywords and identifiers share the same initial scan; the keyword table
     is checked after the identifier text is read.
+  - Reserved keywords (NULL, overload, ptr, alias) are recognised by the
+    lexer and emitted as their own token types so the parser can produce
+    a clear "reserved and not yet implemented" error.
   - ELIF is NOT a single token. else if is two tokens: ELSE then IF.
 
-9.2  Parser
------------
+10.2  Parser
+------------
   - Recursive-descent, hand-written.
   - Produces an ASTNode* tree.
-  - Node types: BinaryOp, UnaryOp, VarDecl, ArrayDecl, Subscript,
-    IfStmt, WhileLoop, ForLoop, FuncDef, FuncCall, ReturnStmt,
-    BreakStmt, ContinueStmt, Block, PtrDecl, Deref, AddressOf.
-  - >> is lexed as RSHIFT; the parser splits it into two GT tokens inside
-    type-parameter contexts.
+  - Node types: BitLiteral, NumberLiteral, Identifier, BinaryOp, UnaryOp,
+    ArrayLiteral, VarDecl, ArrayDecl, FuncDecl, FuncCall, Assign,
+    IfStmt, WhileLoop, ReturnStmt, BreakStmt, ContinueStmt,
+    PrintStmt, InExpr, Block.
+  - Function declarations are collected in a first pass before the main
+    execution pass so forward calls resolve correctly.
+  - >> is lexed as RSHIFT; not split inside type contexts (no generics
+    in the core language).
 
-9.3  Interpreter
-----------------
+10.3  Interpreter
+-----------------
   - Tree-walk interpreter. eval() dispatches on ASTNode type.
-  - Environment: stack of symbol tables (one per scope block).
-  - bit values stored as C++ bool.
-  - bit[N] stored as std::vector<bool> of length N.
-  - ptr stored as a C++ pointer to the interpreter's value representation.
+  - Environment: a linked chain of symbol tables (one per scope block).
+    Each function call pushes a fresh top-level environment; inner blocks
+    push child environments that delegate to their parent on lookup.
+  - bit values stored as C++ int (0 or 1).
+  - bit[N] stored as std::vector<int> of length N.
+  - Break / continue / return are propagated as C++ exceptions
+    (BreakSignal, ContinueSignal, ReturnSignal).
   - Memory model selected at startup; default is ByteAddressedMemory.
 
-9.4  File Extension
--------------------
+10.4  File Extension
+--------------------
   BitC source files use the .bc extension.
-  The interpreter binary is named: bitc
-  Invocation: bitc run program.bc
-              bitc repl
+  The interpreter binary is named: BitC
+  Invocation: BitC program.bc
 
 ================================================================================
   End of BitC BC26 Language Specification

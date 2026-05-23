@@ -80,3 +80,25 @@ struct PrintNode : ASTNode {
 struct BlockNode : ASTNode {
 	std::vector<NodePtr> statements;
 };
+
+struct ParamNode {
+	bool        isArray = false;
+	int         arraySize = 0; 
+	std::string name;
+};
+
+struct FuncDeclNode : ASTNode {
+	std::string            name;
+	std::vector<ParamNode> params;
+	bool                   returnsVoid = true;
+	bool                   returnsArray = false;
+	int                    returnSize = 0;
+	std::vector<NodePtr>   body;
+};
+
+struct FuncCallNode : ASTNode {
+	std::string          name;
+	std::vector<NodePtr> args;
+};
+
+struct InNode : ASTNode {};

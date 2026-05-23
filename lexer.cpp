@@ -63,6 +63,12 @@ Token Lexer::readIdentKey() {
 		{"print",    TokenType::PRINT},
 		{"true",     TokenType::BIT_LITERAL},
 		{"false",    TokenType::BIT_LITERAL},
+		{"NULL",     TokenType::NULL_KW},
+		{"fn",       TokenType::FN},
+		{"in",       TokenType::IN},
+		{"overload", TokenType::OVERLOAD},
+		{"ptr",      TokenType::PTR},
+		{"alias",    TokenType::ALIAS},
 	};
 
 	auto it = keywords.find(text);
@@ -93,11 +99,9 @@ Token Lexer::readSymbol() {
 
 	switch(c) {
 		case '&':
-			if(current() == '&') { advance(); return makeToken(TokenType::AMP_AMP, "&&", startCol); }
 			if(current() == '=') { advance(); return makeToken(TokenType::AMP_EQ, "&=", startCol); }
 			return makeToken(TokenType::AMP, "&", startCol);
 		case '|':
-			if(current() == '|') { advance(); return makeToken(TokenType::PIPE_PIPE, "||", startCol); }
 			if(current() == '=') { advance(); return makeToken(TokenType::PIPE_EQ, "|=", startCol); }
 			return makeToken(TokenType::PIPE, "|", startCol);
 
