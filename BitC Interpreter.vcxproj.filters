@@ -46,6 +46,8 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <None Include="test.bc" />
+    <Text Include="LanguageSpec.txt">
+      <Filter>Source Files</Filter>
+    </Text>
   </ItemGroup>
 </Project>

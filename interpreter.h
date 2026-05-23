@@ -15,14 +15,21 @@ struct BreakSignal {};
 struct ContinueSignal {};
 struct ReturnSignal { BitValue value; };
 
+// Step 18: parent-chained scope. set() writes to THIS scope only (declarations).
+// assign() walks up to find an existing binding and updates it there.
+// get() / has() walk up the chain.
 class Environment {
 public:
+    explicit Environment(Environment* parent = nullptr) : parent(parent) {}
+
     void     set(const std::string& name, BitValue val);
+    void     assign(const std::string& name, BitValue val);
     BitValue get(const std::string& name);
     bool     has(const std::string& name);
 
 private:
     std::unordered_map<std::string, BitValue> vars;
+    Environment* parent;
 };
 
 class Interpreter {
@@ -30,7 +37,10 @@ public:
     void runProgram(const std::vector<NodePtr>& statements);
 
 private:
-    Environment env;
+    // Step 19: top-level environment and function table
+    Environment  globalEnv;
+    Environment* currentEnv = &globalEnv;
+    std::unordered_map<std::string, FuncDeclNode*> functions;
 
     void     execStatement(ASTNode* node);
     BitValue evalExpr(ASTNode* node);
@@ -45,4 +55,6 @@ private:
     BitValue evalBinaryOp(BinaryOpNode* node);
     BitValue evalUnaryOp(UnaryOpNode* node);
     BitValue evalIdentifier(IdentifierNode* node);
+    BitValue evalFuncCall(FuncCallNode* node);  // Step 20
+    BitValue evalIn();                          // Step 21
 };

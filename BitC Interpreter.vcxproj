@@ -146,7 +146,7 @@
     <ClInclude Include="token.h" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="test.bc" />
+    <Text Include="LanguageSpec.txt" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

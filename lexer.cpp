@@ -58,6 +58,8 @@ Token Lexer::readIdentKey() {
 		{"else",     TokenType::ELSE},
 		{"while",    TokenType::WHILE},
 		{"return",   TokenType::RETURN},
+		{"break",    TokenType::BREAK},
+		{"for",    TokenType::FOR},
 		{"continue", TokenType::CONTINUE},
 		{"include",  TokenType::INCLUDE},
 		{"print",    TokenType::PRINT},
@@ -99,9 +101,11 @@ Token Lexer::readSymbol() {
 
 	switch(c) {
 		case '&':
+			if (current() == '&') { advance(); throw std::runtime_error("'&&' is not valid in BC26; use '&' for bitwise AND at line " + std::to_string(line) + " col " + std::to_string(startCol)); }
 			if(current() == '=') { advance(); return makeToken(TokenType::AMP_EQ, "&=", startCol); }
 			return makeToken(TokenType::AMP, "&", startCol);
 		case '|':
+			if (current() == '|') { advance(); throw std::runtime_error("'||' is not valid in BC26; use '|' for bitwise OR at line " + std::to_string(line) + " col " + std::to_string(startCol)); }
 			if(current() == '=') { advance(); return makeToken(TokenType::PIPE_EQ, "|=", startCol); }
 			return makeToken(TokenType::PIPE, "|", startCol);
 
