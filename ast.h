@@ -12,11 +12,11 @@ struct ASTNode {
 using NodePtr = std::unique_ptr<ASTNode>;
 
 struct BitLiteralNode : ASTNode {
-	int value; // 0 or 1
+	int value = 0; // 0 or 1
 };
 
 struct NumberNode : ASTNode {
-	int value;
+	int value = 0;
 };
 
 struct IdentifierNode : ASTNode {
@@ -45,7 +45,7 @@ struct VarDeclNode : ASTNode {
 
 struct ArrayDeclNode : ASTNode {
 	std::string name;
-	int size;
+	int size = 0;
 	NodePtr initializer;
 };
 
